@@ -9,14 +9,14 @@ def calculate_altman_z_score(
     retained_earnings: float,
     ebit: float,
     market_value: float,
-    total_liabilities: float
+    total_liabilities: float,
+    sales: float
 ) -> float:
     """
     Calcula o Altman Z-Score para prever a probabilidade de falência de uma empresa.
-    Esta implementação utiliza a versão de 4 variáveis para empresas focadas em serviços
-    e não-manufatureiras, focando nos parâmetros providenciados.
+    Esta implementação utiliza a versão original de 5 variáveis para empresas de capital aberto.
     
-    Fórmula utilizada: Z = 6.56(X1) + 3.26(X2) + 6.72(X3) + 1.05(X4)
+    Fórmula utilizada: Z = 1.2(X1) + 1.4(X2) + 3.3(X3) + 0.6(X4) + 1.0(X5)
     
     Parâmetros:
         total_assets (float): Ativo Total.
@@ -25,6 +25,7 @@ def calculate_altman_z_score(
         ebit (float): Lucro antes de juros e impostos (EBIT).
         market_value (float): Valor de Mercado do Patrimônio Líquido.
         total_liabilities (float): Passivo Total.
+        sales (float): Vendas/Receita Total.
         
     Retorna:
         float: O Altman Z-Score calculado (arredondado em 4 casas decimais).
@@ -36,8 +37,9 @@ def calculate_altman_z_score(
     x2 = retained_earnings / total_assets
     x3 = ebit / total_assets
     x4 = market_value / total_liabilities
+    x5 = sales / total_assets
     
-    z_score = 6.56 * x1 + 3.26 * x2 + 6.72 * x3 + 1.05 * x4
+    z_score = 1.2 * x1 + 1.4 * x2 + 3.3 * x3 + 0.6 * x4 + 1.0 * x5
     
     return float(np.round(z_score, 4))
 

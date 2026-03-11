@@ -36,6 +36,8 @@ async def fetch_financial_data(ticker_symbol: str) -> dict:
         retained_earnings = get_value(bs, "Retained Earnings", 0.0)
         ebit = get_value(fin, "EBIT", info.get("ebitda", 0.0))
         market_value = info.get("marketCap", 0.0)
+        
+        sales = get_value(fin, "Total Revenue", info.get("totalRevenue", 0.0))
 
         # 2. Dados aproximados para Beneish e outras métricas
         ebitda = info.get("ebitda", 0.0)
@@ -73,6 +75,7 @@ async def fetch_financial_data(ticker_symbol: str) -> dict:
                 "ebit": ebit,
                 "market_value": market_value,
                 "total_liabilities": total_liabilities,
+                "sales": sales
             },
             "beneish_params": {
                 "dsri": dsri,

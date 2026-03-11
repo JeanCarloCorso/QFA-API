@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: qfa_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-V3ryS3cureR00tPass!}
+      MYSQL_DATABASE: ${DB_NAME:-qfa_db}
+      MYSQL_USER: ${DB_USER:-qfa_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-Qfa_SecurePass_2026!}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - qfa_network
+
+volumes:
+  mysql_data:
+
+networks:
+  qfa_network:
+    driver: bridge
