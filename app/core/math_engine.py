@@ -1,6 +1,9 @@
 import asyncio
 import numpy as np
 from typing import Dict, Any, Optional
+import asyncio
+import numpy as np
+from typing import Dict, Any, Optional
 
 def calculate_altman_z_score(
     total_assets: float,
@@ -41,7 +44,6 @@ def calculate_altman_z_score(
     z_score = 1.2 * x1 + 1.4 * x2 + 3.3 * x3 + 0.6 * x4 + 1.0 * x5
     
     return float(np.round(z_score, 4))
-
 
 def calculate_beneish_m_score(
     dsri: float,
@@ -87,12 +89,6 @@ def calculate_beneish_m_score(
         return float(np.round(m_score, 4))
     except Exception as e:
         raise ValueError(f"Erro ao calcular o Beneish M-Score: {str(e)}")
-
-
-import asyncio
-import numpy as np
-from typing import Dict, Any, Optional
-
 
 async def monte_carlo_revenue_projection(
     historical_mean_growth: float,
@@ -238,3 +234,97 @@ async def monte_carlo_revenue_projection(
         stats["simulated_revenues"] = np.round(revenues, 4).tolist()
 
     return stats
+
+def calculate_solvency_metrics(
+    total_debt: float, 
+    cash_and_equivalents: float, 
+    ebitda: float, 
+    current_assets: float, 
+    current_liabilities: float
+) -> Dict[str, float]:
+    """
+    Calcula os indicadores primários de Solvência e Liquidez.
+    Complementa o Altman Z-Score.
+    """
+    net_debt = total_debt - cash_and_equivalents
+    
+    # Prevenção contra divisão por zero se a empresa não gera EBITDA
+    net_debt_to_ebitda = float(np.round(net_debt / ebitda, 4)) if ebitda > 0 else float('inf')
+    
+    current_ratio = float(np.round(current_assets / current_liabilities, 4)) if current_liabilities > 0 else 0.0
+
+    return {
+        "net_debt": net_debt,
+        "net_debt_to_ebitda": net_debt_to_ebitda,
+        "current_ratio": current_ratio
+    }
+
+def calculate_profitability_metrics(
+    net_income: float, 
+    total_equity: float, 
+    ebit: float, 
+    tax_rate: float, 
+    total_debt: float, 
+    cash_and_equivalents: float
+) -> Dict[str, float]:
+    """
+    Calcula Rentabilidade: ROE (Return on Equity) e ROIC (Return on Invested Capital).
+    O ROIC é a métrica definitiva para horizontes de 5 a 10 anos.
+    """
+    roe = float(np.round(net_income / total_equity, 4)) if total_equity > 0 else 0.0
+    
+    # NOPAT (Net Operating Profit After Taxes)
+    nopat = ebit * (1 - tax_rate)
+    
+    # Capital Investido = Dívida + Patrimônio Líquido - Caixa
+    invested_capital = (total_debt + total_equity) - cash_and_equivalents
+    
+    roic = float(np.round(nopat / invested_capital, 4)) if invested_capital > 0 else 0.0
+
+    return {
+        "roe": roe,
+        "roic": roic
+    }
+
+def calculate_efficiency_metrics(
+    gross_profit: float, 
+    ebitda: float, 
+    net_income: float, 
+    revenue: float
+) -> Dict[str, float]:
+    """
+    Calcula a Eficiência Operacional através do poder das margens.
+    """
+    if revenue <= 0:
+        return {"gross_margin": 0.0, "ebitda_margin": 0.0, "net_margin": 0.0}
+
+    return {
+        "gross_margin": float(np.round(gross_profit / revenue, 4)),
+        "ebitda_margin": float(np.round(ebitda / revenue, 4)),
+        "net_margin": float(np.round(net_income / revenue, 4))
+    }
+
+def calculate_valuation_metrics(
+    market_cap: float, 
+    net_income: float, 
+    total_debt: float, 
+    cash_and_equivalents: float, 
+    ebitda: float
+) -> Dict[str, float]:
+    """
+    Calcula os múltiplos de Valuation relativos (Preço).
+    """
+    # P/L (Preço sobre Lucro)
+    pe_ratio = float(np.round(market_cap / net_income, 4)) if net_income > 0 else float('inf')
+    
+    # Enterprise Value (Valor da Firma)
+    enterprise_value = market_cap + total_debt - cash_and_equivalents
+    
+    # EV/EBITDA
+    ev_to_ebitda = float(np.round(enterprise_value / ebitda, 4)) if ebitda > 0 else float('inf')
+
+    return {
+        "enterprise_value": enterprise_value,
+        "pe_ratio": pe_ratio,
+        "ev_to_ebitda": ev_to_ebitda
+    }

@@ -72,6 +72,7 @@ async def run_screener_task(
                     
                 return {
                     "company": company,
+                    "global_score": result.get("global_score"),
                     "scores": result["scores"],
                     "flags": result["flags"],
                     "raw_data_summary": result["raw_data_summary"],
@@ -97,6 +98,7 @@ async def run_screener_task(
         for ev in top_evaluations:
             final_results.append({
                 "ticker": ev["company"].ticker,
+                "global_score": ev.get("global_score"),
                 "scores": ev["scores"],
                 "flags": ev["flags"],
                 "raw_data_summary": ev["raw_data_summary"],

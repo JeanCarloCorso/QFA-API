@@ -43,13 +43,9 @@ async def process_quant_analysis(task_id: str, ticker: str, payload: MacroProjec
                 "error": result["error"]
             }
         else:
-            tasks_db[task_id] = {
-                "status": "completed",
-                "ticker": ticker.upper(),
-                "scores": result["scores"],
-                "flags": result["flags"],
-                "raw_data_summary": result["raw_data_summary"]
-            }
+            # result is already completely formatted by perform_quantitative_analysis
+            tasks_db[task_id] = result
+            
             
     except Exception as e:
         logging.error(f"Erro no processamento da task {task_id} para {ticker}: {e}")

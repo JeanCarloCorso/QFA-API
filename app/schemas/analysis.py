@@ -17,6 +17,7 @@ class RiskFlags(BaseModel):
     manipulation_risk: bool
 
 class AnalysisResultBase(BaseModel):
+    global_score: Optional[float] = None
     scores: Optional[HorizonScore] = None
     flags: Optional[RiskFlags] = None
     raw_data_summary: Optional[Dict[str, Any]] = None
