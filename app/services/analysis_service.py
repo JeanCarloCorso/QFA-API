@@ -44,7 +44,11 @@ async def perform_quantitative_analysis(
             historical_std_dev=mc_params["historical_std_dev"],
             initial_revenue=mc_params["initial_revenue"],
             years=5,
-            iterations=1000
+            iterations=1000,
+            long_term_growth=pib_esperado / 100.0,  # Crescimento converge para a estimativa macro do PIB
+            mean_reversion_strength=0.4,            # Força moderada de reversão
+            shock_probability=0.05,                 # 5% de chance de crise
+            shock_impact=-0.25                      # Impacto de -25% em caso de crise
         )
         
         # 4. Simulação de Notas/Scores combinando base, riscos e macro

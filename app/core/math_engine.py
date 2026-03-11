@@ -1,7 +1,6 @@
 import asyncio
 import numpy as np
-import pandas as pd
-from typing import Dict
+from typing import Dict, Any, Optional
 
 def calculate_altman_z_score(
     total_assets: float,
@@ -90,66 +89,152 @@ def calculate_beneish_m_score(
         raise ValueError(f"Erro ao calcular o Beneish M-Score: {str(e)}")
 
 
+import asyncio
+import numpy as np
+from typing import Dict, Any, Optional
+
+
 async def monte_carlo_revenue_projection(
     historical_mean_growth: float,
     historical_std_dev: float,
     initial_revenue: float = 1.0,
     years: int = 5,
-    iterations: int = 1000
-) -> Dict[str, float]:
+    iterations: int = 1000,
+    long_term_growth: Optional[float] = None,
+    mean_reversion_strength: float = 0.4,
+    tam: Optional[float] = None,
+    # regimes econômicos
+    expansion_mean: float = 0.07,
+    recession_mean: float = -0.02,
+    transition_prob: float = 0.15,
+    # volatilidade estocástica
+    vol_mean: Optional[float] = None,
+    vol_reversion: float = 0.3,
+    vol_volatility: float = 0.15,
+    # choques
+    shock_probability: float = 0.05,
+    shock_impact: float = -0.25,
+    seed: Optional[int] = None,
+    return_distribution: bool = False
+) -> Dict[str, Any]:
     """
-    Executa uma Simulação de Monte Carlo assíncrona para projetar a receita corporativa 
-    ao longo de um horizonte de tempo (padrão 5 anos).
-    
-    A função gera cenários baseados na média e no desvio padrão históricos e retorna 
-    os decis projetados relevantes.
-    
-    Parâmetros:
-        historical_mean_growth (float): Crescimento médio histórico da receita (ex: 0.05 para 5%).
-        historical_std_dev (float): Desvio padrão histórico do crescimento da receita.
-        initial_revenue (float, opcional): Receita base no momento inicial. Padrão: 1.0.
-        years (int, opcional): Horizonte de projeção em anos. Padrão: 5.
-        iterations (int, opcional): Quantidade de cenários de simulação gerados. Padrão: 1000.
-        
-    Retorna:
-        Dict[str, float]: Um dicionário com a receita projetada no final do período para 
-                          os percentis 10%, 50% (mediana) e 90%.
+    Simulação Monte Carlo avançada para projeção de receita corporativa.
+
+    O modelo inclui:
+
+    1) Crescimento log-normal da receita
+    2) Reversão à média do crescimento
+    3) Regimes econômicos (Markov Switching: expansão / recessão)
+    4) Volatilidade estocástica
+    5) Choques macroeconômicos raros
+    6) Limite de crescimento via TAM (Total Addressable Market)
+
+    Modelo de crescimento:
+
+        g_t = g_{t-1} 
+              + k*(μ - g_{t-1})
+              + regime_effect
+              + shock
+              + ε_t
+
+    ε_t ~ Normal(0, σ_t)
+
+    Receita evolui:
+
+        log(R_t) = log(R_{t-1}) + g_t * (1 - R_{t-1}/TAM)
+
+    O fator (1 - R/TAM) impõe crescimento logístico quando TAM é definido.
+
+    Retorna estatísticas da distribuição da receita final simulada.
     """
+
     if historical_std_dev < 0:
-        raise ValueError("O desvio padrão não pode ser negativo.")
+        raise ValueError("historical_std_dev deve ser positivo")
+
+    if initial_revenue <= 0:
+        raise ValueError("initial_revenue deve ser positivo")
+
     if iterations <= 0 or years <= 0:
-        raise ValueError("A quantidade de iterações e os anos de projeção devem ser maiores que zero.")
-        
-    # Yielding de volta para o event loop é recomendado em rotinas async pesadas
-    # como projeções estatísticas extensas a fim de não travar o FastAPI
+        raise ValueError("years e iterations devem ser > 0")
+
+    if not (0 <= shock_probability <= 1):
+        raise ValueError("shock_probability deve estar entre 0 e 1")
+
+    if not (0 <= transition_prob <= 1):
+        raise ValueError("transition_prob deve estar entre 0 e 1")
+
     await asyncio.sleep(0)
-    
-    try:
-        # Geração de matrizes de projeções através do NumPy
-        # Distribuição Normal (anos x iterações)
-        random_growth_rates = np.random.normal(
-            loc=historical_mean_growth, 
-            scale=historical_std_dev, 
-            size=(iterations, years)
+
+    rng = np.random.default_rng(seed)
+
+    if long_term_growth is None:
+        long_term_growth = historical_mean_growth
+
+    if vol_mean is None:
+        vol_mean = historical_std_dev
+
+    # estado inicial
+    g = np.full(iterations, historical_mean_growth)
+    sigma = np.full(iterations, historical_std_dev)
+
+    # 0 = expansão, 1 = recessão
+    regime = rng.integers(0, 2, size=iterations)
+
+    log_revenue = np.full(iterations, np.log(initial_revenue))
+
+    for _ in range(years):
+
+        # transição de regimes (Markov)
+        switch = rng.random(iterations) < transition_prob
+        regime = np.where(switch, 1 - regime, regime)
+
+        regime_mean = np.where(regime == 0, expansion_mean, recession_mean)
+
+        # volatilidade estocástica
+        sigma = (
+            sigma
+            + vol_reversion * (vol_mean - sigma)
+            + vol_volatility * rng.normal(size=iterations)
         )
-        
-        # O crescimento a cada ano é R_t = R_{t-1} * (1 + random_g)
-        growth_factors = 1 + random_growth_rates
-        
-        # Produto cumulativo ao longo dos anos
-        cumulative_growth = np.cumprod(growth_factors, axis=1)
-        
-        # A última coluna da matriz cumulativa representa o fator do último ano (Ano 5)
-        # Multiplica-se este fator pela receita inicial
-        final_revenues = initial_revenue * cumulative_growth[:, -1]
-        
-        # Transformação em pandas Series para melhor legibilidade analítica e extração de percentis
-        series_projections = pd.Series(final_revenues)
-        
-        return {
-            "10th_percentile": float(np.round(series_projections.quantile(0.10), 4)),
-            "50th_percentile": float(np.round(series_projections.quantile(0.50), 4)),
-            "90th_percentile": float(np.round(series_projections.quantile(0.90), 4))
-        }
-    except Exception as e:
-        raise RuntimeError(f"Falha na simulação de Monte Carlo: {str(e)}")
+
+        sigma = np.abs(sigma)
+
+        noise = rng.normal(0, sigma)
+
+        drift = mean_reversion_strength * (long_term_growth - g)
+
+        shocks = (
+            rng.binomial(1, shock_probability, size=iterations)
+            * shock_impact
+        )
+
+        g = g + drift + regime_mean + shocks + noise
+
+        if tam is not None:
+            current_revenue = np.exp(log_revenue)
+            logistic_factor = 1 - (current_revenue / tam)
+            logistic_factor = np.clip(logistic_factor, 0, 1)
+        else:
+            logistic_factor = 1
+
+        log_revenue = log_revenue + g * logistic_factor
+
+    revenues = np.exp(log_revenue)
+
+    stats = {
+        "mean": float(np.round(np.mean(revenues), 4)),
+        "median": float(np.round(np.median(revenues), 4)),
+        "std": float(np.round(np.std(revenues, ddof=1), 4)),
+        "min": float(np.round(np.min(revenues), 4)),
+        "max": float(np.round(np.max(revenues), 4)),
+        "10th_percentile": float(np.round(np.percentile(revenues, 10), 4)),
+        "25th_percentile": float(np.round(np.percentile(revenues, 25), 4)),
+        "50th_percentile": float(np.round(np.percentile(revenues, 50), 4)),
+        "75th_percentile": float(np.round(np.percentile(revenues, 75), 4)),
+        "90th_percentile": float(np.round(np.percentile(revenues, 90), 4)),
+    }
+
+    if return_distribution:
+        stats["simulated_revenues"] = np.round(revenues, 4).tolist()
+
+    return stats
