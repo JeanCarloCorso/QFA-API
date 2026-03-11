@@ -16,6 +16,9 @@ class StockEvaluation(Base):
     global_score = Column(Float, index=True, nullable=True)
     full_analysis_json = Column(JSON, nullable=True)
     last_updated = Column(Date, index=True, default=datetime.date.today, onupdate=datetime.date.today)
+    selic_used = Column(Float, nullable=True)
+    ipca_used = Column(Float, nullable=True)
+    pib_used = Column(Float, nullable=True)
 
     __table_args__ = (
         Index('idx_score_date', 'last_updated', 'global_score'),

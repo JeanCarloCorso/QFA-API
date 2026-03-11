@@ -19,22 +19,16 @@ CREATE TABLE IF NOT EXISTS companies (
     INDEX idx_subsector (subsector)
 );
 
--- 3. Insere alguns dados mocks iniciais
-INSERT INTO companies (ticker, company_name, sector, subsector) VALUES 
-('WEGE3.SA', 'WEG S.A.', 'Industrials', 'Electrical Equipment'),
-('ITUB4.SA', 'Itaú Unibanco Holding S.A.', 'Financial Services', 'Banks'),
-('VALE3.SA', 'Vale S.A.', 'Basic Materials', 'Other Industrial Metals & Mining'),
-('PETR4.SA', 'Petróleo Brasileiro S.A.', 'Energy', 'Oil & Gas Integrated'),
-('ABEV3.SA', 'Ambev S.A.', 'Consumer Defensive', 'Beverages Non-Alcoholic')
-ON DUPLICATE KEY UPDATE updated_at=CURRENT_TIMESTAMP;
-
--- 4. Cria a tabela de avaliações do Screener (Motor Quantitativo)
+-- 3. Cria a tabela de avaliações do Screener (Motor Quantitativo)
 CREATE TABLE IF NOT EXISTS stock_evaluations (
     ticker VARCHAR(20) PRIMARY KEY,
     sector VARCHAR(100),
     global_score DECIMAL(5,2),
     full_analysis_json JSON,
     last_updated DATE,
+    selic_used DECIMAL(5,2),
+    ipca_used DECIMAL(5,2),
+    pib_used DECIMAL(5,2),
     
     INDEX idx_screener_sector (sector),
     INDEX idx_screener_score (global_score),

@@ -90,14 +90,20 @@ async def process_market_sync(db: AsyncSession, macro_data: MacroDataPayload):
                 sector=sector,
                 global_score=global_score,
                 full_analysis_json=sanitized_result,
-                last_updated=date.today()
+                last_updated=date.today(),
+                selic_used=macro_data.selic_esperada,
+                ipca_used=macro_data.ipca_esperado,
+                pib_used=macro_data.pib_esperado
             )
             
             upsert_stmt = insert_stmt.on_duplicate_key_update(
                 sector=insert_stmt.inserted.sector,
                 global_score=insert_stmt.inserted.global_score,
                 full_analysis_json=insert_stmt.inserted.full_analysis_json,
-                last_updated=insert_stmt.inserted.last_updated
+                last_updated=insert_stmt.inserted.last_updated,
+                selic_used=insert_stmt.inserted.selic_used,
+                ipca_used=insert_stmt.inserted.ipca_used,
+                pib_used=insert_stmt.inserted.pib_used
             )
             
             await db.execute(upsert_stmt)
@@ -117,18 +123,28 @@ async def get_screener_by_ticker(ticker: str, db: AsyncSession = Depends(get_db_
     """
     Busca rápida do JSON avaliado completo de um único ativo armazenado.
     """
-    stmt = select(StockEvaluation.full_analysis_json).where(StockEvaluation.ticker == ticker.upper())
+    stmt = select(StockEvaluation).where(StockEvaluation.ticker == ticker.upper())
     result = await db.execute(stmt)
     
-    json_data = result.scalar_one_or_none()
+    record = result.scalar_one_or_none()
     
-    if not json_data:
+    if not record or not record.full_analysis_json:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
             detail=f"Dados não encontrados para {ticker}. Certifique-se de que a empresa existe e que a rotina de Sync rodou."
         )
         
-    return json_data
+    return {
+        "metadata": {
+            "last_updated": record.last_updated.isoformat() if record.last_updated else None,
+            "macro_assumptions": {
+                "selic_used": float(record.selic_used) if record.selic_used is not None else None,
+                "ipca_used": float(record.ipca_used) if record.ipca_used is not None else None,
+                "pib_used": float(record.pib_used) if record.pib_used is not None else None
+            }
+        },
+        "analysis": record.full_analysis_json
+    }
 
 @router.get("/setor/{setor}", response_model=ScreenerSectorResponse, tags=["Screener Readers"])
 async def get_screener_by_sector(
@@ -156,7 +172,20 @@ async def get_screener_by_sector(
         if records[0].last_updated != date.today():
             warning_flag = "Os dados retornados são de um cache antigo. Certifique-se de rodar a rota /screener/sync diariamente."
 
-    data_payload = [rec.full_analysis_json for rec in records]
+    data_payload = []
+    for rec in records:
+        if rec.full_analysis_json:
+            data_payload.append({
+                "metadata": {
+                    "last_updated": rec.last_updated.isoformat() if rec.last_updated else None,
+                    "macro_assumptions": {
+                        "selic_used": float(rec.selic_used) if rec.selic_used is not None else None,
+                        "ipca_used": float(rec.ipca_used) if rec.ipca_used is not None else None,
+                        "pib_used": float(rec.pib_used) if rec.pib_used is not None else None
+                    }
+                },
+                "analysis": rec.full_analysis_json
+            })
     
     return ScreenerSectorResponse(
         warning=warning_flag,
