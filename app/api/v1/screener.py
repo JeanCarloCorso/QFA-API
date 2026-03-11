@@ -9,12 +9,8 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.company import Company
-from app.services.data_provider import fetch_financial_data
-from app.core.math_engine import (
-    calculate_altman_z_score,
-    calculate_beneish_m_score,
-    monte_carlo_revenue_projection
-)
+from app.schemas.analysis import AnalysisResultBase
+from app.services.analysis_service import perform_quantitative_analysis
 
 router = APIRouter()
 
@@ -24,22 +20,8 @@ class ScreenerTaskResponse(BaseModel):
     task_id: str
     message: str
 
-class HorizonScore(BaseModel):
-    ano_1: float
-    ano_2: float
-    ano_5: float
-    ano_10: float
-
-class RiskFlags(BaseModel):
-    bankruptcy_risk: bool
-    manipulation_risk: bool
-
-class ScreenerAssetResult(BaseModel):
+class ScreenerAssetResult(AnalysisResultBase):
     ticker: str
-    scores: HorizonScore
-    flags: RiskFlags
-    raw_data_summary: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
 
 class ScreenerResultResponse(BaseModel):
     status: str
@@ -78,56 +60,21 @@ async def run_screener_task(
         # Avaliação de cada empresa individualmente com métricas parciais completas do nosso motor
         async def evaluate_company(company: Company):
             try:
-                data = await fetch_financial_data(company.ticker)
-                
-                # 1. Altman Z-Score
-                altman_params = data["altman_params"]
-                try:
-                    z_score = calculate_altman_z_score(**altman_params)
-                    bankruptcy_risk = z_score < 1.81 if z_score is not None else False
-                except Exception:
-                    z_score = None
-                    bankruptcy_risk = False
-                    
-                # 2. Beneish M-Score
-                beneish_params = data["beneish_params"]
-                try:
-                    m_score = calculate_beneish_m_score(**beneish_params)
-                    manipulation_risk = m_score > -2.22 if m_score is not None else False
-                except Exception:
-                    manipulation_risk = False
-                    
-                # 3. Monte Carlo e Projeções
-                mc_params = data["monte_carlo_params"]
-                mc_results = await monte_carlo_revenue_projection(
-                    historical_mean_growth=mc_params["historical_mean_growth"],
-                    historical_std_dev=mc_params["historical_std_dev"],
-                    initial_revenue=mc_params["initial_revenue"],
-                    years=5,
-                    iterations=1000
+                result = await perform_quantitative_analysis(
+                    ticker=company.ticker,
+                    selic_esperada=selic_esperada,
+                    ipca_esperado=ipca_esperado,
+                    pib_esperado=pib_esperado
                 )
                 
-                # 4. Cálculo de Score Completo
-                base_score = 7.0
-                if manipulation_risk: base_score -= 3.0
-                if bankruptcy_risk: base_score -= 4.0
-                
-                s1 = max(0.0, min(10.0, base_score + pib_esperado * 0.1))
-                s2 = max(0.0, min(10.0, base_score + pib_esperado * 0.15 - selic_esperada * 0.05))
-                s5 = max(0.0, min(10.0, base_score + pib_esperado * 0.2 - ipca_esperado * 0.1))
-                s10 = max(0.0, min(10.0, base_score))
-                
-                if z_score is not None and z_score < 1.81:
-                    s1 = min(s1, 3.0)
-                    s2 = min(s2, 3.0)
-                    s5 = min(s5, 3.0)
-                    s10 = min(s10, 3.0)
+                if result.get("error"):
+                    return None
                     
                 return {
                     "company": company,
-                    "scores": {"ano_1": round(s1, 2), "ano_2": round(s2, 2), "ano_5": round(s5, 2), "ano_10": round(s10, 2)},
-                    "flags": {"bankruptcy_risk": bankruptcy_risk, "manipulation_risk": manipulation_risk},
-                    "raw_data_summary": mc_results,
+                    "scores": result["scores"],
+                    "flags": result["flags"],
+                    "raw_data_summary": result["raw_data_summary"],
                     "error": None
                 }
             except Exception as e:
