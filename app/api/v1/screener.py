@@ -116,7 +116,14 @@ async def process_market_sync(db: AsyncSession, macro_data: MacroDataPayload):
             
     logging.info("Sincronização em Massa de Screener finalizada para a data de hoje.")
 
-# --- As Novas Rotas ---
+from typing import List
+
+@router.get("/sectors", response_model=List[str], tags=["Sectors"])
+async def list_all_sectors(db: AsyncSession = Depends(get_db_session)):
+    stmt = select(StockEvaluation.sector).distinct()
+    result = await db.execute(stmt)
+    sectors = [row[0] for row in result.fetchall()]
+    return sectors
 
 @router.get("/ticker/{ticker}", tags=["Screener Readers"])
 async def get_screener_by_ticker(ticker: str, db: AsyncSession = Depends(get_db_session)):
@@ -166,11 +173,11 @@ async def get_screener_by_sector(
     
     warning_flag = None
     if not records:
-        warning_flag = f"Dados vazios ou não encontrados para o setor '{setor}'. Rode a rota /screener/sync."
+        warning_flag = f"Dados vazios ou não encontrados para o setor '{setor}'. Atualize a base de dados."
     else:
         # Se algum dos resultados retornados não for de hoje, sobe a Warning.
         if records[0].last_updated != date.today():
-            warning_flag = "Os dados retornados são de um cache antigo. Certifique-se de rodar a rota /screener/sync diariamente."
+            warning_flag = "Os dados retornados são de um cache antigo. Certifique-se de atualizar a base diariamente."
 
     data_payload = []
     for rec in records:

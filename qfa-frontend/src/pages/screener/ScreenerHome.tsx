@@ -1,27 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ScreenerService, type StockEvaluationRecord } from '@/services/api';
 import { GlobalScoreBadge } from '@/components/qfa/GlobalScoreBadge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertCircle, ArrowRight, Activity } from 'lucide-react';
 
-const SECTORS = [
-    "Financial Services",
-    "Utilities",
-    "Technology",
-    "Energy",
-    "Basic Materials",
-    "Consumer Defensive"
-];
 
 export function ScreenerHome() {
-    const [sector, setSector] = useState("Financial Services");
+    const [sectors, setSectors] = useState<string[]>([]);
+    const [sector, setSector] = useState("");
     const [data, setData] = useState<StockEvaluationRecord[]>([]);
     const [loading, setLoading] = useState(false);
     const [warning, setWarning] = useState<string | null>(null);
 
     useEffect(() => {
+        async function loadSectors() {
+            try {
+                const availableSectors = await ScreenerService.getSectors();
+                const filteredSectors = availableSectors.filter(s => s && s.trim() !== "");
+                setSectors(filteredSectors);
+                if (filteredSectors.length > 0) {
+                    setSector(filteredSectors[0]);
+                }
+            } catch (err) {
+                console.error("Erro ao carregar setores:", err);
+            }
+        }
+        loadSectors();
+    }, []);
+
+    useEffect(() => {
+        if (!sector) return;
         async function loadData() {
             setLoading(true);
             try {
@@ -56,7 +66,7 @@ export function ScreenerHome() {
                             <SelectValue placeholder="Selecione o Setor" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-slate-700">
-                            {SECTORS.map(s => (
+                            {sectors.map(s => (
                                 <SelectItem key={s} value={s}>{s}</SelectItem>
                             ))}
                         </SelectContent>

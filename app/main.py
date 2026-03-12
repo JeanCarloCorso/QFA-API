@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import health, screener, companies, sandbox
+from app.api.v1 import health, screener, companies, sandbox, analysis
 
 app = FastAPI(
     title="QFA-API",
@@ -21,3 +21,4 @@ app.include_router(health.router, prefix="/api/v1/health")
 app.include_router(screener.router, prefix="/api/v1/screener")
 app.include_router(companies.router, prefix="/api/v1/companies")
 app.include_router(sandbox.router, prefix="/api/v1/sandbox")
+app.include_router(analysis.router, prefix="/api/v1/analysis")

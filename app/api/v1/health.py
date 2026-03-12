@@ -1,9 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 import asyncio
 import yfinance as yf
 from sqlalchemy import text
-from app.core.database import engine
+from app.core.database import engine, get_db_session
+import asyncio
 
 router = APIRouter()
 
@@ -14,6 +16,7 @@ class DependenciesHealth(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     dependencies: DependenciesHealth
+    base_updated_percentage: float
 
 async def check_database() -> str:
     """Verificação real de conexão com o banco de dados via SQLAlchemy async."""
@@ -38,7 +41,7 @@ async def check_yfinance() -> str:
         return f"error: {str(e)}"
 
 @router.get("/", response_model=HealthResponse, tags=["Health"])
-async def health_check():
+async def health_check(db: AsyncSession = Depends(get_db_session)):
     """
     Endpoint abrangente para verificar a saúde da API e de suas dependências
     críticas (Provedores Financeiros).
@@ -49,10 +52,25 @@ async def health_check():
     # Se qualquer dependência falhar, a API sinaliza "degraded"
     overall_status = "healthy" if yf_status == "ok" and db_status == "ok" else "degraded"
     
+    try:
+        stmt = text("""
+            SELECT 
+                (COUNT(se.ticker) * 100.0 / (SELECT COUNT(c.ticker) FROM companies c)) 
+                AS porcentagem_atualizada
+            FROM stock_evaluations se
+            WHERE se.last_updated = CURRENT_DATE
+        """)
+        result = await db.execute(stmt)
+        percentage = result.scalar() or 0.0
+    except Exception as e:
+        print(f"Error occurred while fetching distinct sectors: {e}")
+        percentage = 0.0
+
     return {
         "status": overall_status,
         "dependencies": {
             "database": db_status,
             "yfinance": yf_status
-        }
+        },
+        "base_updated_percentage": percentage
     }

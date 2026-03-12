@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ScreenerService, type StockEvaluationRecord } from '@/services/api';
+import { ScreenerService, AnalysisService, type StockEvaluationRecord } from '@/services/api';
 import { GlobalScoreBadge, getScoreColor } from '@/components/qfa/GlobalScoreBadge';
 import { QfaRadarChart } from '@/components/qfa/QfaRadarChart';
 import { InfoTooltip } from '@/components/qfa/InfoTooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, AlertOctagon, TrendingUp, DollarSign, Activity, Percent, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, AlertOctagon, TrendingUp, DollarSign, Activity, ShieldAlert, RefreshCw, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StressTestSidebar } from '@/components/qfa/StressTestSidebar';
 
@@ -16,27 +16,63 @@ export function ActionDashboard() {
     const [loading, setLoading] = useState(false);
     const [errorNotFound, setErrorNotFound] = useState(false);
 
-    // Stress Test State overrides the record with simulated API response
+    // Async Task State
+    const [taskStatus, setTaskStatus] = useState<'idle' | 'processing' | 'done' | 'failed'>('idle');
     const [isSimulating, setIsSimulating] = useState(false);
 
-    useEffect(() => {
-        async function loadData() {
-            if (!ticker) return;
-            setLoading(true);
-            setErrorNotFound(false);
-            try {
-                const response = await ScreenerService.getTickerData(ticker);
-                setRecord(response);
-            } catch (err: any) {
-                if (err.response?.status === 404) {
-                    setErrorNotFound(true);
-                } else {
-                    console.error(err);
-                }
-            } finally {
-                setLoading(false);
+    const loadData = async () => {
+        if (!ticker) return;
+        setLoading(true);
+        setErrorNotFound(false);
+        try {
+            const response = await ScreenerService.getTickerData(ticker);
+            setRecord(response);
+            setIsSimulating(false);
+        } catch (err: any) {
+            if (err.response?.status === 404) {
+                setErrorNotFound(true);
             }
+        } finally {
+            setLoading(false);
         }
+    };
+
+    const handleBackgroundRefresh = async () => {
+        if (!ticker || !record) return;
+        setTaskStatus('processing');
+        try {
+            const { task_id } = await AnalysisService.startAnalysis(ticker, {
+                selic_esperada: record.metadata.macro_assumptions.selic_used || 10.75,
+                ipca_esperado: record.metadata.macro_assumptions.ipca_used || 4.5,
+                pib_esperado: record.metadata.macro_assumptions.pib_used || 2.0
+            });
+
+            // Poll for result
+            const pollInterval = setInterval(async () => {
+                try {
+                    const result = await AnalysisService.getAnalysisResult(task_id);
+                    if (result.status === 'success') {
+                        clearInterval(pollInterval);
+                        setTaskStatus('done');
+                        loadData(); // Reload to get the new persistent data
+                        setTimeout(() => setTaskStatus('idle'), 3000);
+                    } else if (result.status === 'failed') {
+                        clearInterval(pollInterval);
+                        setTaskStatus('failed');
+                        setTimeout(() => setTaskStatus('idle'), 5000);
+                    }
+                } catch (e) {
+                    // Still processing or error
+                }
+            }, 2000);
+
+        } catch (err) {
+            setTaskStatus('failed');
+            setTimeout(() => setTaskStatus('idle'), 5000);
+        }
+    };
+
+    useEffect(() => {
         loadData();
     }, [ticker]);
 
@@ -152,6 +188,28 @@ export function ActionDashboard() {
                                     <span className="text-5xl font-black text-slate-100">{analysis.global_score.toFixed(1)}</span>
                                     <span className="text-xs text-slate-400 mt-1 font-semibold uppercase">Global Score</span>
                                 </div>
+                            </div>
+
+                            <div className="mt-8 w-full px-6">
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        "w-full border-slate-800 bg-slate-950/50 hover:bg-slate-800 text-slate-400 text-xs h-9 gap-2",
+                                        taskStatus === 'done' && "text-emerald-500 border-emerald-500/20",
+                                        taskStatus === 'failed' && "text-rose-500 border-rose-500/20"
+                                    )}
+                                    onClick={handleBackgroundRefresh}
+                                    disabled={taskStatus === 'processing'}
+                                >
+                                    {taskStatus === 'processing' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                                        taskStatus === 'done' ? <CheckCircle2 className="w-3 h-3" /> :
+                                            <RefreshCw className="w-3 h-3" />}
+
+                                    {taskStatus === 'processing' ? 'Recalculando...' :
+                                        taskStatus === 'done' ? 'Atualizado!' :
+                                            taskStatus === 'failed' ? 'Erro na Fila' :
+                                                'Atualizar na Base'}
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>

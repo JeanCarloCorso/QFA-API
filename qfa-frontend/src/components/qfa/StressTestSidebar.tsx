@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScreenerService, type MacroAssumptions } from '@/services/api';
+import { SandboxService, type MacroAssumptions } from '@/services/api';
 import { Settings2, Loader2, Sparkles } from 'lucide-react';
 
 interface StressTestSidebarProps {
@@ -28,7 +28,7 @@ export function StressTestSidebar({ ticker, defaultMacros, onSimulate }: StressT
                 pib_esperado: parseFloat(pib)
             };
 
-            const newAnalysis = await ScreenerService.runStressTest(ticker, payload);
+            const newAnalysis = await SandboxService.runStressTest(ticker, payload);
             onSimulate(newAnalysis); // Pass the raw new JSON payload up to Dashboard
 
         } catch (err) {

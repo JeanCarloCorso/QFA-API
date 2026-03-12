@@ -88,6 +88,26 @@ export interface StressTestPayload {
     pib_esperado: number;
 }
 
+export interface HealthResponse {
+    status: string;
+    dependencies: {
+        database: string;
+        yfinance: string;
+    };
+    base_updated_percentage: number;
+}
+
+export interface SyncCompaniesResponse {
+    total_received_from_api: number;
+    total_processed: number;
+    message: string;
+}
+
+export interface TaskResponse {
+    task_id: string;
+    message: string;
+}
+
 // --- API Service Methods ---
 export const ScreenerService = {
     getSectorRanking: async (sector: string, limit: number = 10): Promise<ScreenerSectorResponse> => {
@@ -101,8 +121,42 @@ export const ScreenerService = {
         return response.data;
     },
 
+    getSectors: async (): Promise<string[]> => {
+        const response = await api.get('/screener/sectors');
+        return response.data;
+    },
+
+    syncScreener: async (payload: StressTestPayload): Promise<{ message: string }> => {
+        const response = await api.post('/screener/sync', payload);
+        return response.data;
+    }
+};
+
+export const SandboxService = {
     runStressTest: async (ticker: string, payload: StressTestPayload): Promise<QfaAnalysis> => {
         const response = await api.post(`/sandbox/stress-test/${ticker}`, payload);
+        return response.data;
+    }
+};
+
+export const AdminService = {
+    syncCompanies: async (): Promise<SyncCompaniesResponse> => {
+        const response = await api.get('/companies/sync');
+        return response.data;
+    },
+    getHealth: async (): Promise<HealthResponse> => {
+        const response = await api.get('/health/');
+        return response.data;
+    }
+};
+
+export const AnalysisService = {
+    startAnalysis: async (ticker: string, payload: StressTestPayload): Promise<TaskResponse> => {
+        const response = await api.post(`/analysis/quant/${ticker}`, payload);
+        return response.data;
+    },
+    getAnalysisResult: async (taskId: string): Promise<QfaAnalysis & { status: string }> => {
+        const response = await api.get(`/analysis/result/${taskId}`);
         return response.data;
     }
 };
